@@ -75,14 +75,16 @@ collides pms b (MkP pyl phl) (MkP pyr phr) pxr' = record { bCenter = newP, veloc
 
 data Outcome = HumanWins | AIWins
 
-aiTrack : Paddle -> Float -> Ball -> Paddle
-aiTrack rightPaddle w (MkB (x, y) r (vx, vy)) = 
+aiTrack : PongParams -> Paddle -> Float -> Ball -> Paddle
+aiTrack pms rightPaddle w (MkB (x, y) r (vx, vy)) = 
   if x > 3*w/4 
     then record {pCenter = pCenter rightPaddle + pvy} rightPaddle
     else record {pCenter = pCenter rightPaddle + pvy*abs pvy/4} rightPaddle
  where boundMagnitude : Float -> Float -> Float
-       boundMagnitude mag val = min mag (max (-mag) val)
-       pvy = boundMagnitude 2 (2 * (y - pCenter rightPaddle) / pHeight rightPaddle)
+       boundMagnitude mag val = min mag (max (-mag) (mag * val))
+       speed : Float
+       speed = aiSpeed pms
+       pvy = boundMagnitude speed ((y - pCenter rightPaddle) / pHeight rightPaddle)
 
 step : PongParams -> Float -> InputState -> PongState -> Either Outcome PongState
 step pms deltaT (MkI mouseY) (MkSt (MkB (x, y) r (vx, vy)) (w, h) leftPaddle rightPaddle) =
@@ -97,7 +99,7 @@ step pms deltaT (MkI mouseY) (MkSt (MkB (x, y) r (vx, vy)) (w, h) leftPaddle rig
            newBall = if x < 0 || x > w 
                         then (if x < 0 then Left AIWins else Left HumanWins)
                         else Right (collides pms movedBall leftPaddle rightPaddle w)
-           newRight = Right (aiTrack rightPaddle w !newBall)
+           newRight = Right (aiTrack pms rightPaddle w !newBall)
 
 -- functions for manipulating the canvas
 setFillStyle : String -> IO ()
