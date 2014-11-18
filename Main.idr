@@ -117,13 +117,14 @@ rect : (Float, Float) -> (Float, Float) -> IO ()
 rect (x, y) (w, h) = do
   mkForeign (FFun "context.fillRect(%0, %1, %2, %3)" [FFloat, FFloat, FFloat, FFloat] FUnit) x y w h
 
-draw : PongState -> IO ()
-draw (MkSt (MkB p r v) (w,h) (MkP ly lh) (MkP ry rh)) = do
+draw : PongParams -> PongState -> IO ()
+draw pms (MkSt (MkB p r v) (w,h) (MkP ly lh) (MkP ry rh)) = do
   clear "#000000"
   setFillStyle "#FFFFFF"
   height <- mkForeign (FFun "canvas.height" [] FInt)
-  rect (0, ly - lh/2) (4, lh)
-  rect (w-4, ry - rh/2) (4, rh)
+  let pw = paddleWidth pms
+  rect (0, ly - lh/2) (pw, lh)
+  rect (w-pw, ry - rh/2) (pw, rh)
   circle p 5
 
 newGame : PongParams -> IO PongState
@@ -151,11 +152,35 @@ setTimeout : (() -> IO a) -> Float -> IO ()
 setTimeout {a} f millis =
     mkForeign (FFun "setTimeout(%0, %1)" [FFunction FUnit (FAny (IO a)), FFloat] FUnit) f millis
 
+readParam : String -> IO (Maybe Float)
+readParam name = do
+    val <- mkForeign (FFun "document.params[%0].value" [FString] FString) name
+    return (readNumber val)
+  where validFloatString : Bool -> List Char -> Bool
+        validFloatString False ('.'::xs) = validFloatString True xs
+        validFloatString True ('.'::xs) = False
+        validFloatString seenDot (c::xs) = isDigit c && validFloatString seenDot xs
+        validFloatString _ [] = True
+        readNumber : String -> Maybe Float
+        readNumber s = if validFloatString False (unpack s) then Just $ cast s else Nothing
+
+
+getParams : IO (Maybe PongParams)
+getParams = do
+  speed <- readParam "aiSpeed"
+  twist <- readParam "twistFactor"
+  height <- readParam "paddleHeight"
+  width <- readParam "paddleWidth"
+  accel <- readParam "accelFactor"
+  vx0 <- readParam "vx0Factor"
+  vy0 <- readParam "vy0Factor"
+  return $ [| MkPms speed twist height width accel vx0 vy0 |]
+
 partial
 play : PongParams -> PongState -> (Outcome -> IO ()) -> IO ()
 play pms p f = do
   clear "#000000"
-  draw p
+  draw pms p
   mouse <- mkForeign (FFun "mouseY" [] FFloat)
   case (step pms 1 (MkI mouse) p) of
     Right next => setTimeout (\() => play pms next f) (1000/60)
@@ -166,12 +191,14 @@ run : Game phase -> IO ()
 run (Play pms st (h, ai)) = play pms st report where
   report HumanWins = run (Report pms (h+1, ai) 2)
   report AIWins = run (Report pms (h, ai+1) 2)
-run (Report pms score duration) = do
+run (Report old score duration) = do
   drawReport score
+  new <- getParams
+  let pms = maybe old id new
   st <- newGame pms
   setTimeout (\() => run (Wait pms st score 2)) (cast duration * 1000)
 run (Wait pms st score duration) = do
-  draw st
+  draw pms st
   setTimeout (\() => run (Play pms st score)) (cast duration * 1000)
 
 partial
