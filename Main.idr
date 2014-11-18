@@ -54,9 +54,9 @@ collides pms b (MkP pyl phl) (MkP pyr phr) pxr' = record { bCenter = newP, veloc
   pxr : Float
   pxr = pxr' - pw
   left : Bool
-  left = y <= pyl + phl/2 && y >= pyl - phl/2 && x <= pxl + pw && x >= pxl
+  left = y <= pyl + phl/2 && y >= pyl - phl/2 && x - bRad b <= pxl + pw && x + bRad b >= pxl
   right : Bool
-  right = y <= pyr + phr/2 && y >= pyr - phr/2 && x <= pxr + pw && x >= pxr
+  right = y <= pyr + phr/2 && y >= pyr - phr/2 && x - bRad b <= pxr + pw && x + bRad b >= pxr
   newX : Float
   newX = if left then pxl + pw + bRad b
                  else (if right then pxr - bRad b else x)
