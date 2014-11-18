@@ -179,6 +179,7 @@ readParam name = do
   where validFloatString : Bool -> List Char -> Bool
         validFloatString False ('.'::xs) = validFloatString True xs
         validFloatString True ('.'::xs) = False
+        validFloatString seenDot ('-'::xs) = not ('-' `elem` xs) && validFloatString seenDot xs
         validFloatString seenDot (c::xs) = isDigit c && validFloatString seenDot xs
         validFloatString _ [] = True
         readNumber : String -> Maybe Float
