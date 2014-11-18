@@ -88,7 +88,7 @@ aiTrack : PongParams -> Paddle -> Float -> Ball -> Paddle
 aiTrack pms rightPaddle w (MkB (x, y) r (vx, vy)) = 
   if x > 3*w/4 
     then record {pCenter = pCenter rightPaddle + pvy} rightPaddle
-    else record {pCenter = pCenter rightPaddle + pvy*abs pvy/4} rightPaddle
+    else record {pCenter = pCenter rightPaddle + pvy*abs pvy/(speed*speed)} rightPaddle
  where boundMagnitude : Float -> Float -> Float
        boundMagnitude mag val = min mag (max (-mag) (mag * val))
        speed : Float
