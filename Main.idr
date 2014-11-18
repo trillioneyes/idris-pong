@@ -126,15 +126,16 @@ draw (MkSt (MkB p r v) (w,h) (MkP ly lh) (MkP ry rh)) = do
   rect (w-4, ry - rh/2) (4, rh)
   circle p 5
 
-newGame : IO PongState
-newGame = do
+newGame : PongParams -> IO PongState
+newGame pms = do
   width <- mkForeign (FFun "canvas.width" [] FFloat)
   height <- mkForeign (FFun "canvas.height" [] FFloat)
   angle <- mkForeign (FFun "Math.random() * 2 * Math.PI" [] FFloat)
   vx <- mkForeign (FFun "Math.sin(%0)" [FFloat] FFloat) angle
   vy <- mkForeign (FFun "Math.cos(%0)" [FFloat] FFloat) angle
-  let ball = MkB (width/2, height/2) 4 (vx*3, vy*1.2)
-  return (MkSt ball (width, height) (MkP (height/2) 50) (MkP (height/2) 50))
+  let ball = MkB (width/2, height/2) 4 (vx*vx0Factor pms, vy*vy0Factor pms)
+  let paddle = MkP (height/2) (paddleHeight pms)
+  return (MkSt ball (width, height) paddle paddle)
 
 drawReport : (Int, Int) -> IO ()
 drawReport (h, ai) = do
@@ -167,7 +168,7 @@ run (Play pms st (h, ai)) = play pms st report where
   report AIWins = run (Report pms (h, ai+1) 2)
 run (Report pms score duration) = do
   drawReport score
-  st <- newGame
+  st <- newGame pms
   setTimeout (\() => run (Wait pms st score 2)) (cast duration * 1000)
 run (Wait pms st score duration) = do
   draw st
