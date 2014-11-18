@@ -156,13 +156,26 @@ fillText : String -> (Int, Int) -> IO ()
 fillText s (x, y) = mkForeign (FFun "context.fillText(%0, %1, %2)" [FString, FInt, FInt] FUnit)
                               s x y
 
+centerText : String -> (pixelSize : Int) -> (family : String) -> 
+             (rectTL : (Int, Int)) -> (rectSize : (Int, Int)) ->
+             IO ()
+centerText str textHeight family (x, y) (w, h) = do
+  setFont (show textHeight ++ "px " ++ family)
+  textWidth <- measure str
+  let dispX = (w - textWidth) `div` 2
+  let dispY = (h - textHeight) `div` 2
+  fillText str (x + dispX, y + dispY + textHeight)
+ where measure : String -> IO Int
+       measure str = mkForeign (FFun "context.measureText(%0).width" [FString] FInt) str
+
 drawReport : (Int, Int) -> IO ()
 drawReport (h, ai) = do
     clear "#000000"
     setFillStyle "#FFFFFF"
-    setFont "120px Courier"
-    fillText (show h) (50, 100)
-    fillText (show ai) (260, 100)
+    width <- jsVar "canvas.width" FInt
+    height <- jsVar "canvas.height" FInt
+    centerText (show h) 120 "Courier" (0, 0) ((width `div` 2) - 10, height)
+    centerText (show ai) 120 "Courier" ((width `div` 2) + 10, 0) ((width `div` 2) - 10, height)
 
 setTimeout : (() -> IO a) -> Float -> IO ()
 setTimeout {a} f millis =
@@ -202,9 +215,12 @@ showMenu = do
   clear "black"
   setFont "120px Lucida Console"
   setFillStyle "white"
-  fillText "PONG" (5, 120)
+  width <- jsVar "canvas.width" FInt
+  height <- jsVar "canvas.height" FInt
+  centerText "PONG" 120 "Lucida Console" (0, 0) (width, height)
   setFont "12px Lucida Console"
   fillText "Set the parameters and click here to start" (60, 175)
+  centerText "set the parameters and click here to start" 12 "Lucida" (0, 3*height`div`4) (width, height)
 
 partial
 play : PongParams -> PongState -> (Outcome -> IO ()) -> IO ()
