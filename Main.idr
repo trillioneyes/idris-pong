@@ -73,15 +73,15 @@ collides pms b (MkP pyl phl) (MkP pyr phr) pxr' = record { bCenter = newP, veloc
   newVX : Float
   newVX = if left then abs (fst (velocity b))
                   else (if right then - abs (fst (velocity b)) else fst (velocity b))
-  factor : Float
-  factor = if left || right then accelFactor pms else 1
   newP = (newX, y)
   vy : Float
   vy = snd (velocity b)
   dvy : Float
   dvy = if left then twistFactor pms * (y - pyl) / phl
                 else (if right then twistFactor pms * (y - pyr) / phr else 0)
-  newV = (newVX * factor, vy * factor + dvy)
+  factor : Float
+  factor = if left || right then accelFactor pms / (1 + abs dvy) else 0
+  newV = (newVX + factor * newVX/abs newVX, vy + dvy)
 
 data Outcome = HumanWins | AIWins | Quit
 
