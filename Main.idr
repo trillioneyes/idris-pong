@@ -216,6 +216,28 @@ readParam name = do
         readNumber : String -> Maybe Float
         readNumber s = if validFloatString False (unpack s) then Just $ cast s else Nothing
 
+writeParam : String -> Float -> IO ()
+writeParam name val =
+  mkForeign (FFun "document.params[%0].value = %1" [FString, FFloat] FUnit) name val
+
+putParams : PongParams -> IO ()
+putParams (MkPms speed twist height width accel vx0 vy0) = do
+  writeParam "aiSpeed" speed
+  writeParam "twistFactor" twist
+  writeParam "paddleHeight" height
+  writeParam "paddleWidth" width
+  writeParam "accelFactor" accel
+  writeParam "vx0Factor" vx0
+  writeParam "vy0Factor" vy0
+
+setEnabled : Bool -> String -> IO ()
+setEnabled setting name =
+  mkForeign (FFun "document.params[%0].disabled = %1 != 1" [FString, FInt] FUnit)
+            name (if setting then 1 else 0)
+toggleParamsEnabled : Bool -> IO ()
+toggleParamsEnabled setting =
+  traverse_ {t = List} (setEnabled setting) 
+            ["aiSpeed", "twistFactor", "paddleHeight", "paddleWidth", "accelFactor", "vx0Factor", "vy0Factor"]
 
 getParams : IO (Maybe PongParams)
 getParams = do
@@ -302,6 +324,7 @@ startGame : () -> IO ()
 startGame _ = do
   killDemo
   pms <- getParams
+  toggleParamsEnabled False
   reallyStart pms
  where reallyStart : Maybe PongParams -> IO ()
        reallyStart Nothing = do
@@ -339,6 +362,7 @@ run (Wait pms st score duration) = do
 
 run Choose = do
   demoSetTimeout (\() => run (DemoWait 2 3)) 10000
+  toggleParamsEnabled True
   showMenu
   setClick startGame
 
@@ -349,6 +373,8 @@ run (Demo pms st reps) = do
 
 run (DemoWait duration reps) = do
     pms <- randomParams
+    putParams pms
+    toggleParamsEnabled False
     st <- newGame pms
     draw pms st
     instructions
