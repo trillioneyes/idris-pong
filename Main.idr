@@ -261,16 +261,16 @@ normal = return (!random + !random + !random / 3) where
 
 randomParams : IO PongParams
 randomParams = do
-  speed <- maybeParam 6 "aiSpeed"
+  speed <- maybeParam 10 "aiSpeed"
   twist <- maybeParam 1.3 "aiSpeed"
   height <- maybeParam 50 "paddleHeight"
-  width <- maybeParam 4 "paddleWidth"
-  accel <- maybeParam 1.05 "accelFactor"
+  width <- maybeParam 7 "paddleWidth"
+  accel <- maybeParam 1.25 "accelFactor"
   vx0 <- maybeParam 4 "vx0Factor"
   vy0 <- maybeParam 0.6 "vy0Factor"
-  return (MkPms (speed + !normal*4) (twist + !normal*2)
-                (height + !normal*15) (max 3 . abs $ width + !normal*8)
-                (accel + !normal*0.1) (vx0 + !normal*3)
+  return (MkPms (max 4 $ speed + !normal*3) (twist + !normal*2)
+                (max 10 $ height + !normal*15) (max 3 . abs $ width + !normal*8)
+                (max 1 $ accel + !normal*0.1) (vx0 + !normal*1.5)
                 (vy0 + !normal))
  where maybeParam : Float -> String -> IO Float
        maybeParam def name = return def
