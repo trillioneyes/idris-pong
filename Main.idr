@@ -21,8 +21,6 @@ record PongParams : Type where
           (accelFactor : Float) -> (vx0Factor : Float) -> (vy0Factor : Float) ->
           PongParams
 
-defaultParams : PongParams
-defaultParams = MkPms 2 1 50 4 1.05 3 1.2
 
 data Phase = Playing | ShowScore | Waiting | Menu | Attract
 data Game : Phase -> Type where
@@ -341,8 +339,6 @@ run (Demo pms st reps) = do
     attractPlay pms st next 
   where next Quit = run Choose
         next _ = if reps == 0 then run Choose else do
-            let pms = defaultParams
-            st <- newGame pms
             run (DemoWait 2 (reps-1))
 
 run (DemoWait duration reps) = do
