@@ -181,8 +181,12 @@ drawReport (h, ai) = do
     setFillStyle "#FFFFFF"
     width <- jsVar "canvas.width" FInt
     height <- jsVar "canvas.height" FInt
-    centerText (show h) 120 "Courier" (0, 0) ((width `div` 2) - 10, height)
-    centerText (show ai) 120 "Courier" ((width `div` 2) + 10, 0) ((width `div` 2) - 10, height)
+    case (h >= 7, ai >= 7) of
+      (False, False) => do
+        centerText (show h) 120 "Courier" (0, 0) ((width `div` 2) - 10, height)
+        centerText (show ai) 120 "Courier" ((width `div` 2) + 10, 0) ((width `div` 2) - 10, height)
+      (True, False) => centerText "Human wins!" 40 "Courier" (0, 0) (width, height)
+      (_, True) => centerText "AI wins!" 80 "Courier" (0, 0) (width, height)
 
 setTimeout : (() -> IO a) -> Float -> IO Int
 setTimeout {a} f millis =
@@ -350,13 +354,19 @@ run (Report winner pms score duration) = do
   drawReport (revert winner score)
   setTimeout (\() => do
     drawReport score
-    st <- newGame pms
-    setTimeout (\() => run (Wait pms st score 2)) (cast duration * 500)
-    return ()) (cast duration * 500)
+    continueGame) (cast duration * 500)
   return ()
  where revert : Side -> (Int, Int) -> (Int, Int)
        revert Human (h, ai) = (h-1, ai)
        revert AI (h, ai) = (h, ai-1)
+       continueGame : IO ()
+       continueGame = do
+         st <- newGame pms
+         setTimeout (\() => if fst score >= 7 || snd score >= 7
+                               then run Choose
+                               else run (Wait pms st score 2))
+                    (cast duration * 500)
+         return ()
 
 run (Wait pms st score duration) = do
   draw pms st
