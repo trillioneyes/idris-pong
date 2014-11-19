@@ -21,11 +21,12 @@ record PongParams : Type where
           (accelFactor : Float) -> (vx0Factor : Float) -> (vy0Factor : Float) ->
           PongParams
 
+data Side : Type
 
 data Phase = Playing | ShowScore | Waiting | Menu | Attract
 data Game : Phase -> Type where
   Play : PongParams -> PongState -> (Int, Int) -> Game Playing
-  Report : PongParams -> (Int, Int) -> (duration : Int) -> Game ShowScore
+  Report : Side -> PongParams -> (Int, Int) -> (duration : Int) -> Game ShowScore
   Wait : PongParams -> PongState -> (Int, Int) -> (duration : Int) -> Game Waiting
   Choose : Game Menu
   Demo : PongParams -> PongState -> (repetitions : Int) -> Game Attract
@@ -315,15 +316,21 @@ startGame _ = do
          run (Wait pms !(newGame pms) (0, 0) 2) 
 
 run (Play pms st (h, ai)) = play pms st report where
-  report HumanWins = run (Report pms (h+1, ai) 2)
-  report AIWins = run (Report pms (h, ai+1) 2)
+  report HumanWins = run (Report Human pms (h+1, ai) 2)
+  report AIWins = run (Report AI pms (h, ai+1) 2)
   report Quit = run Choose
 
-run (Report pms score duration) = do
-  drawReport score
-  st <- newGame pms
-  setTimeout (\() => run (Wait pms st score 2)) (cast duration * 1000)
+run (Report winner pms score duration) = do
+  drawReport (revert winner score)
+  setTimeout (\() => do
+    drawReport score
+    st <- newGame pms
+    setTimeout (\() => run (Wait pms st score 2)) (cast duration * 500)
+    return ()) (cast duration * 500)
   return ()
+ where revert : Side -> (Int, Int) -> (Int, Int)
+       revert Human (h, ai) = (h-1, ai)
+       revert AI (h, ai) = (h, ai-1)
 
 run (Wait pms st score duration) = do
   draw pms st
@@ -338,8 +345,7 @@ run Choose = do
 run (Demo pms st reps) = do 
     attractPlay pms st next 
   where next Quit = run Choose
-        next _ = if reps == 0 then run Choose else do
-            run (DemoWait 2 (reps-1))
+        next _ = if reps == 0 then run Choose else run (DemoWait 2 (reps-1))
 
 run (DemoWait duration reps) = do
     pms <- randomParams
