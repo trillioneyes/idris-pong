@@ -7,6 +7,7 @@ function setFillStyle(color) {
 
 var mouseY = canvas.height / 2;
 var escape = false;
+var demoProc = 0;
 
 canvas.onmousemove = function(e) {
   mouseY = e.layerY;

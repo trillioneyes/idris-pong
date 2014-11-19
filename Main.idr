@@ -24,12 +24,14 @@ record PongParams : Type where
 defaultParams : PongParams
 defaultParams = MkPms 2 1 50 4 1.05 3 1.2
 
-data Phase = Playing | ShowScore | Waiting | Menu
+data Phase = Playing | ShowScore | Waiting | Menu | Attract
 data Game : Phase -> Type where
   Play : PongParams -> PongState -> (Int, Int) -> Game Playing
   Report : PongParams -> (Int, Int) -> (duration : Int) -> Game ShowScore
   Wait : PongParams -> PongState -> (Int, Int) -> (duration : Int) -> Game Waiting
   Choose : Game Menu
+  Demo : PongParams -> PongState -> (repetitions : Int) -> Game Attract
+  DemoWait : (duration : Int) -> (repetitions : Int) -> Game Waiting
 
 -- Functions for manipulating the game state
 record InputState : Type where
@@ -84,16 +86,22 @@ collides pms b (MkP pyl phl) (MkP pyr phr) pxr' = record { bCenter = newP, veloc
 
 data Outcome = HumanWins | AIWins | Quit
 
-aiTrack : PongParams -> Paddle -> Float -> Ball -> Paddle
-aiTrack pms rightPaddle w (MkB (x, y) r (vx, vy)) = 
-  if x > 3*w/4 
-    then record {pCenter = pCenter rightPaddle + pvy} rightPaddle
-    else record {pCenter = pCenter rightPaddle + pvy*abs pvy/(speed*speed)} rightPaddle
+data Side = Human | AI
+aiChasePos : PongParams -> Paddle -> Float -> Side -> Ball -> Float
+aiChasePos pms rightPaddle w side (MkB (x, y) r (vx, vy)) = 
+  if isn'tLazy side w x
+    then pCenter rightPaddle + pvy
+    else pCenter rightPaddle + pvy*abs pvy/(speed*speed)
  where boundMagnitude : Float -> Float -> Float
        boundMagnitude mag val = min mag (max (-mag) (mag * val))
        speed : Float
        speed = aiSpeed pms
        pvy = boundMagnitude speed ((y - pCenter rightPaddle) / pHeight rightPaddle)
+       isn'tLazy : Side -> Float -> Float -> Bool
+       isn'tLazy AI w x = x > 3*w/4
+       isn'tLazy Human w x = x < w/4
+aiTrack : PongParams -> Paddle -> Float -> Ball -> Paddle
+aiTrack pms rightPaddle w b = record { pCenter = aiChasePos pms rightPaddle w AI b } rightPaddle
 
 step : PongParams -> Float -> InputState -> PongState -> Either Outcome PongState
 step pms deltaT (MkI mouseY esc) (MkSt (MkB (x, y) r (vx, vy)) (w, h) leftPaddle rightPaddle) =
@@ -177,9 +185,20 @@ drawReport (h, ai) = do
     centerText (show h) 120 "Courier" (0, 0) ((width `div` 2) - 10, height)
     centerText (show ai) 120 "Courier" ((width `div` 2) + 10, 0) ((width `div` 2) - 10, height)
 
-setTimeout : (() -> IO a) -> Float -> IO ()
+setTimeout : (() -> IO a) -> Float -> IO Int
 setTimeout {a} f millis =
-    mkForeign (FFun "setTimeout(%0, %1)" [FFunction FUnit (FAny (IO a)), FFloat] FUnit) f millis
+    mkForeign (FFun "setTimeout(%0, %1)" [FFunction FUnit (FAny (IO a)), FFloat] FInt) f millis
+
+killDemo : IO ()
+killDemo = do
+  proc <- jsVar "demoProc" FInt
+  mkForeign (FFun "clearTimeout(%0)" [FInt] FUnit) proc
+
+demoSetTimeout : (() -> IO a) -> Float -> IO ()
+demoSetTimeout f millis = do
+  killDemo
+  proc <- setTimeout f millis
+  mkForeign (FFun "demoProc = %0" [FInt] FUnit) proc
 
 setClick : (() -> IO b) -> IO ()
 setClick f {b} =
@@ -210,44 +229,81 @@ getParams = do
   vy0 <- readParam "vy0Factor"
   return $ [| MkPms speed twist height width accel vx0 vy0 |]
 
+normal : IO Float
+normal = return (!random + !random + !random / 3) where
+  subtract : Float -> Float -> Float
+  subtract x y = y - x
+  random = map ((subtract 1) . (*2)) $ mkForeign (FFun "Math.random()" [] FFloat)
+
+randomParams : IO PongParams
+randomParams = do
+  speed <- maybeParam 6 "aiSpeed"
+  twist <- maybeParam 1.3 "aiSpeed"
+  height <- maybeParam 50 "paddleHeight"
+  width <- maybeParam 4 "paddleWidth"
+  accel <- maybeParam 1.05 "accelFactor"
+  vx0 <- maybeParam 4 "vx0Factor"
+  vy0 <- maybeParam 0.6 "vy0Factor"
+  return (MkPms (speed + !normal*4) (twist + !normal*2)
+                (height + !normal*15) (max 3 . abs $ width + !normal*8)
+                (accel + !normal*0.1) (vx0 + !normal*3)
+                (vy0 + !normal))
+ where maybeParam : Float -> String -> IO Float
+       maybeParam def name = map (maybe def id) (readParam name)
+
+instructions : IO ()
+instructions = do
+  width <- jsVar "canvas.width" FInt
+  height <- jsVar "canvas.height" FInt
+  centerText "Set the parameters and click here to start." 12 "Lucida Console"
+             (0, 3*height`div`4) (width, height`div`4)
+
 showMenu : IO ()
 showMenu = do
   clear "black"
-  setFont "120px Lucida Console"
   setFillStyle "white"
   width <- jsVar "canvas.width" FInt
   height <- jsVar "canvas.height" FInt
   centerText "PONG" 120 "Lucida Console" (0, 0) (width, height)
-  setFont "12px Lucida Console"
-  fillText "Set the parameters and click here to start" (60, 175)
-  centerText "set the parameters and click here to start" 12 "Lucida" (0, 3*height`div`4) (width, height)
+  setFillStyle "white"
+  instructions
 
 partial
 play : PongParams -> PongState -> (Outcome -> IO ()) -> IO ()
 play pms p f = do
+  killDemo
   clear "#000000"
   draw pms p
   input <- getInputState
   case (step pms 1 input p) of
-    Right next => setTimeout (\() => play pms next f) (1000/60)
+    Right next => setTimeout (\() => play pms next f) (1000/60) >>= const (return ())
+    Left winner => f winner
+
+partial
+attractPlay : PongParams -> PongState -> (Outcome -> IO ()) -> IO ()
+attractPlay pms p f = do
+  clear "#000000"
+  draw pms p
+  width <- jsVar "canvas.width" FInt
+  height <- jsVar "canvas.height" FInt
+  setFillStyle "white"
+  instructions
+  input <- getInputState
+  let leftPaddle = left p
+  let input' = record { mouseY = aiChasePos pms leftPaddle (cast width) Human (ball p)} input
+  case (step pms 1 input' p) of
+    Right next => do 
+      demoSetTimeout (\() => attractPlay pms next f) (1000/60)
     Left winner => f winner
 
 partial
 run : Game phase -> IO ()
-run (Play pms st (h, ai)) = play pms st report where
-  report HumanWins = run (Report pms (h+1, ai) 2)
-  report AIWins = run (Report pms (h, ai+1) 2)
-  report Quit = run Choose
-run (Report pms score duration) = do
-  drawReport score
-  st <- newGame pms
-  setTimeout (\() => run (Wait pms st score 2)) (cast duration * 1000)
-run (Wait pms st score duration) = do
-  draw pms st
-  setTimeout (\() => run (Play pms st score)) (cast duration * 1000)
-run Choose = do
-  showMenu
-  setClick startGame
+
+startGame : () -> IO ()
+startGame _ = do
+  killDemo
+  pms <- getParams
+  reallyStart pms
  where reallyStart : Maybe PongParams -> IO ()
        reallyStart Nothing = do
          clear "black"
@@ -255,13 +311,46 @@ run Choose = do
          setFillStyle "white"
          fillText "There was an error in your parameters" (5, 100)
          setTimeout (\_ => run Choose) 3000
+         return ()
        reallyStart (Just pms) = do
          setClick (const (return ()))
          run (Wait pms !(newGame pms) (0, 0) 2) 
-       startGame : () -> IO ()
-       startGame _ = do
-         pms <- getParams
-         reallyStart pms
+
+run (Play pms st (h, ai)) = play pms st report where
+  report HumanWins = run (Report pms (h+1, ai) 2)
+  report AIWins = run (Report pms (h, ai+1) 2)
+  report Quit = run Choose
+
+run (Report pms score duration) = do
+  drawReport score
+  st <- newGame pms
+  setTimeout (\() => run (Wait pms st score 2)) (cast duration * 1000)
+  return ()
+
+run (Wait pms st score duration) = do
+  draw pms st
+  setTimeout (\() => run (Play pms st score)) (cast duration * 1000)
+  return ()
+
+run Choose = do
+  demoSetTimeout (\() => run (DemoWait 2 3)) 10000
+  showMenu
+  setClick startGame
+
+run (Demo pms st reps) = do 
+    attractPlay pms st next 
+  where next Quit = run Choose
+        next _ = if reps == 0 then run Choose else do
+            let pms = defaultParams
+            st <- newGame pms
+            run (DemoWait 2 (reps-1))
+
+run (DemoWait duration reps) = do
+    pms <- randomParams
+    st <- newGame pms
+    draw pms st
+    instructions
+    demoSetTimeout (\() => run (Demo pms st reps)) (cast duration*1000)
 
 partial
 main : IO ()
