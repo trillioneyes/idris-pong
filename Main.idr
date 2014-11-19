@@ -203,6 +203,9 @@ setClick : (() -> IO b) -> IO ()
 setClick f {b} =
   mkForeign (FFun "canvas.onclick = %0" [FFunction FUnit (FAny (IO b))] FUnit) f
 
+paramNames : List String
+paramNames = ["aiSpeed", "twistFactor", "paddleHeight", "paddleWidth", "accelFactor", "vx0Factor", "vy0Factor"]
+
 readParam : String -> IO (Maybe Float)
 readParam name = do
     val <- mkForeign (FFun "document.params[%0].value" [FString] FString) name
@@ -270,7 +273,7 @@ randomParams = do
                 (accel + !normal*0.1) (vx0 + !normal*3)
                 (vy0 + !normal))
  where maybeParam : Float -> String -> IO Float
-       maybeParam def name = map (maybe def id) (readParam name)
+       maybeParam def name = return def
 
 instructions : IO ()
 instructions = do
